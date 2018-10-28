@@ -1,0 +1,85 @@
+buildscript {
+	ext {
+		springBootVersion = '2.0.5.RELEASE'
+		organization = 'ibmdev'
+
+	}
+	repositories {
+		maven {
+			url 'https://repo.spring.io/libs-milestone'
+		}
+		maven {
+			url 'https://plugins.gradle.org/m2/'
+		}
+		jcenter()
+		mavenCentral()
+	}
+	dependencies {
+		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+		classpath 'com.bmuschko:gradle-docker-plugin:4.0.2'
+		classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.6.2"
+	}
+}
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+apply plugin: "org.sonarqube"
+apply plugin: 'com.bmuschko.docker-remote-api'
+
+group = 'fr.sma'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = 8
+targetCompatibility = 8
+
+/** Imports **/
+
+import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
+import com.bmuschko.gradle.docker.tasks.image.Dockerfile
+import com.bmuschko.gradle.docker.tasks.image.DockerRemoveImage
+
+
+/** Tasks **/
+
+task createDockerfile(type: Dockerfile, dependsOn: [build]) {
+
+	destFile = project.file('Dockerfile')
+	from 'openjdk:8-jre-slim'
+	addFile 'build/libs/'+project.name+'-'+project.version+'.jar',System.env.HOME + '/app.jar'
+	workingDir System.env.HOME
+	user(System.env.USER)
+	exposePort 8080
+	entryPoint 'java','-jar','./app.jar'
+
+}
+
+task buildDockerfile(type: DockerBuildImage, dependsOn: createDockerfile) {
+	inputDir = createDockerfile.destFile.get().asFile.parentFile
+	tag = organization+'/'+project.name+':'+project.version
+}
+
+task cleanDockerImages(type: DockerRemoveImage, dependsOn: clean) {
+	targetImageId organization+'/'+project.name+':'+project.version
+	onError {
+		System.out.println("No previous image to delete")
+	}
+}
+
+repositories {
+	maven {
+		url 'https://repo.spring.io/libs-milestone'
+	}
+	maven {
+		url 'https://plugins.gradle.org/m2/'
+	}
+	jcenter()
+}
+
+dependencies {
+	implementation('org.springframework.boot:spring-boot-starter')
+	testImplementation('org.springframework.boot:spring-boot-starter-test')
+	compile('org.springframework.boot:spring-boot-starter-web')
+    compile "org.springframework.boot:spring-boot-starter-actuator"
+	testCompile("org.springframework.boot:spring-boot-starter-test")
+}
